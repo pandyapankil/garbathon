@@ -82,6 +82,19 @@ export default function LandingPage() {
     }
   };
 
+  const handleLoadSample = async () => {
+    setStatusMsg('Loading sample inbox for Riya…');
+    try {
+      const res = await fetch('/sample-inbox.json');
+      const text = await res.text();
+      const file = new File([text], 'sample-inbox.json', { type: 'application/json' });
+      const apps = await classifyEmails(file);
+      navigate('/dashboard');
+    } catch (err) {
+      navigate('/dashboard');
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
@@ -156,14 +169,24 @@ export default function LandingPage() {
               <div className="upload-icon" aria-hidden="true">📬</div>
               <p className="upload-text">Drop your inbox JSON here</p>
               <p className="upload-sub">or click to browse · accepts sample-inbox.json format</p>
-              <button
-                className="btn-primary"
-                onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}
-                aria-label="Browse to upload inbox JSON"
-                id="upload-btn"
-              >
-                Upload Inbox JSON
-              </button>
+              <div className="upload-actions">
+                <button
+                  className="btn-primary"
+                  onClick={e => { e.stopPropagation(); fileRef.current?.click(); }}
+                  aria-label="Browse to upload inbox JSON"
+                  id="upload-btn"
+                >
+                  Upload Inbox JSON
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={e => { e.stopPropagation(); handleLoadSample(); }}
+                  aria-label="Load sample inbox"
+                  id="load-sample-btn"
+                >
+                  ⚡ Load 20 Sample Emails
+                </button>
+              </div>
             </>
           )}
         </div>

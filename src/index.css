@@ -234,6 +234,36 @@ body { min-height: 100vh; overflow-x: hidden; }
 }
 .btn-ghost:hover { border-color: var(--indigo); color: var(--text); }
 
+.upload-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.btn-secondary {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s;
+  min-height: 44px;
+}
+.btn-secondary:hover {
+  background: rgba(99, 102, 241, 0.28);
+  border-color: #818cf8;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+.btn-secondary:active {
+  transform: translateY(0);
+}
+
 /* Spinner */
 .spinner {
   width: 28px; height: 28px;
