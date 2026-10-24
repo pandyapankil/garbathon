@@ -1,194 +1,322 @@
 const express = require('express');
-const cors = require('cors');
 const path = require('path');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 8080; // NEVER hardcode — Cloud Run sets $PORT
+const PORT = process.env.PORT || 8080;
 
 app.use(cors());
-app.use(express.json());
-app.use(require(require('fs').existsSync('./geminiRoutes.js') ? './geminiRoutes' : './dist/geminiRoutes.js'));
-
-// Serve Vite build output
+app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // ─────────────────────────────────────────────────────────────
-// CRITICAL: Firebase Runtime Config
-// Credentials are NOT available at Docker build time.
-// Express reads them from process.env at runtime — this is the
-// only pattern that prevents a blank page on Cloud Run.
+// GET /api/config — serve Firebase config at runtime
 // ─────────────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => {
+  const apiKey = process.env.FIREBASE_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: 'FIREBASE_API_KEY not configured' });
+  }
   res.json({
-    apiKey:            process.env.FIREBASE_API_KEY            || "AIzaSyAmmvliUGEwfELxNLRiLmtdh6u0XrvrbDE",
-    authDomain:        process.env.FIREBASE_AUTH_DOMAIN        || "promptwars-aug29.firebaseapp.com",
-    projectId:         process.env.FIREBASE_PROJECT_ID         || "promptwars-aug29",
-    storageBucket:     process.env.FIREBASE_STORAGE_BUCKET     || "promptwars-aug29.firebasestorage.app",
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "913258105665",
-    appId:             process.env.FIREBASE_APP_ID             || "1:913258105665:web:a6d323eee3151089102fc0",
+    apiKey,
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.FIREBASE_APP_ID,
   });
 });
 
 // ─────────────────────────────────────────────────────────────
-// Gemini Feature 1 — Teammate Matchmaking
-// POST /api/gemini-match
-// Body: { skills, role, interests }
-// Returns: { matches: [{ name, skills, reason, fit, participantId }] }
+// GET /api/healthz — liveness probe
 // ─────────────────────────────────────────────────────────────
-app.post('/api/gemini-match', async (req, res) => {
-  const { skills, role, interests } = req.body;
-
-  const CANDIDATE_POOL = [
-    { participantId: 'uid-rohan', name: 'Rohan Kulkarni', skills: ['PyTorch', 'CI/CD', 'Python'] },
-    { participantId: 'uid-rahul', name: 'Rahul Verma',    skills: ['Node.js', 'Express', 'Firebase'] },
-    { participantId: 'uid-sneha', name: 'Sneha Iyer',     skills: ['React Native', 'GraphQL', 'AWS'] },
-  ];
-
-  try {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
-
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
-    const prompt = `You are a hackathon teammate matchmaker.
-
-Seeker profile:
-- Skills: ${skills}
-- Role: ${role}  
-- Interests: ${interests}
-
-Candidate pool:
-${CANDIDATE_POOL.map((c, i) => `${i + 1}. ${c.name} — Skills: ${c.skills.join(', ')}`).join('\n')}
-
-Rank all 3 candidates for compatibility with the seeker. For each, write a single-line match reason (max 15 words) explaining the fit. Estimate fit percentage.
-
-Respond ONLY with valid JSON in this exact format:
-{
-  "matches": [
-    { "participantId": "uid-rohan", "name": "Rohan Kulkarni", "skills": ["PyTorch", "CI/CD", "Python"], "reason": "<one-line reason>", "fit": 92 },
-    { "participantId": "uid-rahul", "name": "Rahul Verma", "skills": ["Node.js", "Express", "Firebase"], "reason": "<one-line reason>", "fit": 88 },
-    { "participantId": "uid-sneha", "name": "Sneha Iyer", "skills": ["React Native", "GraphQL", "AWS"], "reason": "<one-line reason>", "fit": 81 }
-  ]
-}`;
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in response');
-    const parsed = JSON.parse(jsonMatch[0]);
-    res.json(parsed);
-  } catch (err) {
-    console.error('Gemini match error:', err.message);
-    res.status(500).json({ error: '⚠ Gemini unavailable — retry' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
-// Gemini Feature 2 — Announcement TL;DR
-// POST /api/gemini-tldr
-// Body: { title, body }
-// Returns: { tldr: string }
-// ─────────────────────────────────────────────────────────────
-app.post('/api/gemini-tldr', async (req, res) => {
-  const { title, body } = req.body;
-  try {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
-
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
-    const prompt = `Summarize this event announcement in exactly ONE concise sentence (max 15 words). Be specific and actionable. Return ONLY the summary sentence, nothing else.
-
-Title: ${title}
-Body: ${body}`;
-
-    const result = await model.generateContent(prompt);
-    const tldr = result.response.text().trim().replace(/^["']|["']$/g, '');
-    res.json({ tldr });
-  } catch (err) {
-    console.error('Gemini TL;DR error:', err.message);
-    res.status(500).json({ error: '⚠ Gemini unavailable — retry' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
-// Gemini Feature 3 — Score Variance Analysis
-// POST /api/gemini-analysis
-// Body: { teamName, scores: [{ judgeId, criteria, total }] }
-// Returns: { variance, criterion, recommendation, alert }
-// ─────────────────────────────────────────────────────────────
-app.post('/api/gemini-analysis', async (req, res) => {
-  const { teamName, scores } = req.body;
-  try {
-    const geminiKey = process.env.GEMINI_API_KEY;
-    if (!geminiKey) throw new Error('GEMINI_API_KEY not set');
-
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(geminiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
-    const prompt = `Analyze these judge scores for ${teamName}:
-${JSON.stringify(scores, null, 2)}
-
-If the variance between any two judges exceeds 15 points, flag it.
-Identify the criterion with the largest divergence.
-Respond ONLY with JSON:
-{
-  "variance": <number>,
-  "criterion": "<criterion name>",
-  "recommendation": "<one-line action for organizer>",
-  "shouldFlag": <true|false>
-}`;
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text().trim();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON');
-    res.json(JSON.parse(jsonMatch[0]));
-  } catch (err) {
-    console.error('Gemini analysis error:', err.message);
-    res.status(500).json({ error: '⚠ Gemini unavailable — retry' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────
-// FCM Broadcast (Firebase Cloud Messaging)
-// POST /api/broadcast
-// Body: { title, body, severity }
-// ─────────────────────────────────────────────────────────────
-app.post('/api/broadcast', async (req, res) => {
-  const { title, body, severity } = req.body;
-  try {
-    // FCM requires firebase-admin — gracefully skip if not configured
-    const admin = require('firebase-admin');
-    if (!admin.apps.length) {
-      admin.initializeApp({ projectId: process.env.FIREBASE_PROJECT_ID });
-    }
-    await admin.messaging().sendToTopic('all-participants', {
-      notification: { title, body },
-      data: { severity: severity || 'NORMAL' },
-    });
-    res.json({ sent: true });
-  } catch (err) {
-    console.warn('FCM broadcast skipped (firebase-admin not configured):', err.message);
-    res.json({ sent: false, reason: 'FCM optional — Firestore write is the source of truth' });
-  }
-});
-
-// Health check
-app.get('/api/health', (req, res) => {
+app.get('/api/healthz', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// SPA fallback — all non-API routes → index.html
+// ─────────────────────────────────────────────────────────────
+// GET /api/readyz — readiness probe
+// ─────────────────────────────────────────────────────────────
+app.get('/api/readyz', (req, res) => {
+  const ready = !!process.env.FIREBASE_API_KEY && !!process.env.GEMINI_API_KEY;
+  if (!ready) {
+    return res.status(503).json({ status: 'not ready', reason: 'env vars missing' });
+  }
+  res.json({ status: 'ready' });
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/classify — classify emails with Gemini
+// Body: { emails: RawEmail[], idToken?: string }
+// Returns: { applications: Application[] }
+// ─────────────────────────────────────────────────────────────
+app.post('/api/classify', async (req, res) => {
+  const { emails, idToken } = req.body;
+
+  // Verify Firebase ID token on mutating route
+  if (idToken) {
+    try {
+      const admin = getFirebaseAdmin();
+      await admin.auth().verifyIdToken(idToken);
+    } catch (err) {
+      console.error('Token verification failed:', err.message);
+      return res.status(401).json({ error: 'Invalid auth token' });
+    }
+  }
+
+  if (!Array.isArray(emails) || emails.length === 0) {
+    return res.status(400).json({ error: 'emails array required' });
+  }
+
+  const geminiKey = process.env.GEMINI_API_KEY;
+  if (!geminiKey) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  }
+
+  const today = new Date();
+
+  try {
+    const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(geminiKey);
+
+    const schema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        results: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              id: { type: SchemaType.STRING },
+              status: { type: SchemaType.STRING },
+              scamReasons: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+              scamConfidence: { type: SchemaType.NUMBER },
+              company: { type: SchemaType.STRING },
+              role: { type: SchemaType.STRING },
+            },
+            required: ['id', 'status', 'scamReasons', 'scamConfidence', 'company', 'role'],
+          },
+        },
+      },
+      required: ['results'],
+    };
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: schema,
+      },
+      systemInstruction: `You are an email classifier for a job seeker's inbox after a layoff.
+
+For EACH email in the array, classify it with:
+- id: copy the email id exactly
+- status: one of "applied" | "interview" | "rejected" | "offer" | "scam"
+  * applied: acknowledgement, application received, under review
+  * interview: invitation to interview, scheduling a call, technical round
+  * rejected: not moving forward, decided to go with other candidates
+  * offer: formal offer letter, CTC mentioned, joining date given
+  * scam: any of the scam signals below
+- scamReasons: array of strings (empty [] if not scam). Use these exact phrases when applicable:
+    "Sender uses free email (Gmail/Yahoo) impersonating a known company"
+    "Asks for training fee or security deposit"
+    "Requests personal documents (Aadhaar, PAN, bank details)"
+    "Promises unrealistic salary with no interview process"
+    "Urgent pressure with 24-48 hour deadline to accept"
+    "Government job offer with registration fee — common fraud pattern"
+- scamConfidence: 0.0 to 1.0 (1.0 = definite scam)
+- company: extracted company name (e.g. "Razorpay", "Deloitte" — even if impersonated)
+- role: extracted job role (e.g. "Software Engineer", "Data Entry Operator")
+
+SCAM DETECTION RULES (be strict):
+- Any free email domain (gmail.com, yahoo.com, hotmail.com) claiming to be a large company = scam
+- Any request for money, training fee, registration fee, security deposit = scam
+- Any request for Aadhaar, PAN, bank account number = scam
+- Government job with fee = scam
+- "No experience needed" + high salary + immediate joining = strong scam signal
+
+Classify ALL emails provided. Return results for every single id.`,
+    });
+
+    const emailsText = JSON.stringify(emails.map(e => ({
+      id: e.id,
+      subject: e.subject,
+      from: e.from,
+      date: e.date,
+      body: e.body.substring(0, 500), // truncate for token efficiency
+    })));
+
+    const result = await model.generateContent(`Classify these ${emails.length} emails:\n${emailsText}`);
+    const responseText = result.response.text();
+    const parsed = JSON.parse(responseText);
+    const classifications = parsed.results || [];
+
+    // Build Application objects
+    const applications = emails.map(email => {
+      const classification = classifications.find(c => c.id === email.id) || {
+        id: email.id,
+        status: 'applied',
+        scamReasons: [],
+        scamConfidence: 0,
+        company: extractDomain(email.from),
+        role: 'Unknown Role',
+      };
+
+      const emailDate = new Date(email.date);
+      const followUpDue = (classification.status === 'applied' || classification.status === 'interview')
+        ? new Date(emailDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        : null;
+      const isFollowUpOverdue = followUpDue ? new Date(followUpDue) < today : false;
+
+      return {
+        id: email.id,
+        company: classification.company || extractDomain(email.from),
+        role: classification.role || 'Unknown Role',
+        emailSubject: email.subject,
+        emailFrom: email.from,
+        emailDate: email.date,
+        emailBody: email.body,
+        status: classification.status || 'applied',
+        scamReasons: classification.scamReasons || [],
+        scamConfidence: classification.scamConfidence || 0,
+        followUpDue,
+        isFollowUpOverdue,
+        classifiedAt: new Date().toISOString(),
+      };
+    });
+
+    // Write to Firestore
+    try {
+      const admin = getFirebaseAdmin();
+      const db = admin.firestore();
+      const batch = db.batch();
+      for (const app of applications) {
+        const ref = db.collection('applications').doc(app.id);
+        batch.set(ref, app, { merge: true });
+      }
+      await batch.commit();
+    } catch (firestoreErr) {
+      console.error('Firestore write error (non-fatal):', firestoreErr.message);
+    }
+
+    res.json({ applications });
+  } catch (err) {
+    console.error('Classify error:', err.message);
+
+    // Fallback: classify all as 'applied'
+    const fallbackApps = emails.map(email => {
+      const emailDate = new Date(email.date);
+      const followUpDue = new Date(emailDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      return {
+        id: email.id,
+        company: extractDomain(email.from),
+        role: 'Unknown Role',
+        emailSubject: email.subject,
+        emailFrom: email.from,
+        emailDate: email.date,
+        emailBody: email.body,
+        status: 'applied',
+        scamReasons: [],
+        scamConfidence: 0,
+        followUpDue,
+        isFollowUpOverdue: new Date(followUpDue) < today,
+        classifiedAt: new Date().toISOString(),
+      };
+    });
+    res.json({ applications: fallbackApps, fallback: true });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// GET /api/applications — list all from Firestore
+// ─────────────────────────────────────────────────────────────
+app.get('/api/applications', async (req, res) => {
+  try {
+    const admin = getFirebaseAdmin();
+    const db = admin.firestore();
+    const snapshot = await db.collection('applications').limit(100).get();
+    const applications = snapshot.docs.map(doc => doc.data());
+    res.json({ applications });
+  } catch (err) {
+    console.error('Fetch applications error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch applications', applications: [] });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// POST /api/seed — auto-seed from sample-inbox.json
+// ─────────────────────────────────────────────────────────────
+app.post('/api/seed', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const samplePath = path.join(__dirname, 'dist', 'sample-inbox.json');
+    const altPath = path.join(__dirname, 'public', 'sample-inbox.json');
+    const filePath = fs.existsSync(samplePath) ? samplePath : altPath;
+    const emails = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+    // Forward to classify
+    const classifyRes = await fetch(`http://localhost:${PORT}/api/classify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails }),
+    });
+    const data = await classifyRes.json();
+    res.json({ seeded: true, count: data.applications?.length || 0 });
+  } catch (err) {
+    console.error('Seed error:', err.message);
+    res.status(500).json({ error: 'Seed failed: ' + err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// PATCH /api/applications/:id/followup — mark follow-up done
+// ─────────────────────────────────────────────────────────────
+app.patch('/api/applications/:id/followup', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const admin = getFirebaseAdmin();
+    const db = admin.firestore();
+    await db.collection('applications').doc(id).update({
+      isFollowUpOverdue: false,
+      followedUpAt: new Date().toISOString(),
+    });
+    res.json({ updated: true });
+  } catch (err) {
+    console.error('Follow-up update error:', err.message);
+    res.status(500).json({ error: 'Update failed' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────
+function extractDomain(email) {
+  try {
+    const domain = email.split('@')[1]?.split('.')[0] || 'Unknown';
+    return domain.charAt(0).toUpperCase() + domain.slice(1);
+  } catch {
+    return 'Unknown';
+  }
+}
+
+let _adminApp = null;
+function getFirebaseAdmin() {
+  if (_adminApp) return _adminApp;
+  const admin = require('firebase-admin');
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      projectId: process.env.FIREBASE_PROJECT_ID || 'promptwars-aug29',
+    });
+  }
+  _adminApp = admin;
+  return admin;
+}
+
+// SPA fallback
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 EventPulse server listening on port ${PORT}`);
+  console.log(`Job Hunt Autopilot server listening on port ${PORT}`);
 });

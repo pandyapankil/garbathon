@@ -1,67 +1,38 @@
-# EventPulse — Smart Event Operations Platform
+# Job Hunt Autopilot
 
 ## PROBLEM
-At 9 AM on event day, hackathon organizers face overwhelming chaos: long check-in lines with fragile spreadsheets, lost solo participants wandering without teams, and missed announcements across scattered WhatsApp chats. Critical event operations break down across disjointed tools, leaving participants anxious and organizers flying blind.
+
+After a layoff, Riya applied to 140 jobs in 6 weeks. She got scammed twice — once by a fake Deloitte HR from a Gmail address asking for a ₹2,500 "training fee," once by a fake IBM recruiter asking for her Aadhaar number. She missed follow-up windows on 11 companies because her inbox was chaos. She still doesn't know who actually read her resume.
 
 ## SOLUTION
-EventPulse is a unified, real-time event operations platform that consolidates attendee check-in, skill-based AI team matchmaking, live announcement broadcasting, judge scoring queues, and real-time leaderboards into a single synchronized command center.
+
+Job Hunt Autopilot reads your inbox JSON and runs every email through Gemini 2.0 Flash with structured output. Each email is classified as Applied, Interview, Rejected, Offer, or Scam — in one pass. Scam emails appear at the top of the dashboard in red with exact reasons from Gemini. Applied and Interview cards show a yellow "Follow up now" banner after 7 days of silence. One upload. Instant clarity.
+
+## PROMPT ENGINEERING APPROACH
+
+Built using Google Antigravity with Claude Sonnet 4.6 Thinking → Gemini Flash.
+
+**Stack:** Gemini 2.0 Flash structured output (`responseMimeType: application/json` + `responseSchema`), Firestore (`applications` collection, `.limit(100)` on all reads), Firebase Auth (`verifyIdToken()` on `/api/classify`), Cloud Run (asia-south1, Express + Vite).
+
+**Strategy:**
+- **Actor-first scaffolding** — all prompts written from Riya's perspective (post-layoff chaos), not as a generic email tool
+- **Domain-saturated Gemini system prompt** — scam signals specific to India: training fees, free-email domain impersonation, Aadhaar/PAN requests, PM Yojana fraud patterns
+- **Seed-first demo** — 20 pre-classified emails load automatically on first visit; no judge action needed to see the wow moment
+- **Structured output** — Gemini returns typed JSON (status, scamReasons[], scamConfidence 0-1, company, role) — no regex parsing, no hallucination slippage
+
+See [docs/prompts/](docs/prompts/) for all AntiGravity prompts used.
+See [GOOGLE_SERVICES.md](GOOGLE_SERVICES.md) for exact file paths and API call locations.
 
 ## HOW TO ACCESS
-- **Live Prototype URL:** https://promptwars-aug29-yujtd6zcea-el.a.run.app
-- **First Click:** Open the app to view the **Organizer Live Ops Dashboard** and watch check-ins and scoring tick live without refreshing, or switch roles to test **QR Check-in** and **Find My Team**.
-- **Demo Credentials:** Use the one-click demo sign-in buttons on the login page for instantaneous role-based access.
 
-## ARCHITECTURE
-Built for scale and real-time synchronization utilizing: **Cloud Run + Firestore onSnapshot + 3 Gemini endpoints**. 
+**Live URL:** https://promptwars-aug29-yujtd6zcea-el.a.run.app
 
-## PROMPT ENGINEERING EVIDENCE
-Our Gemini integrations are designed for zero-hallucination deterministic state machines. Below are the exact prompts used in production. Full prompt history and reasoning logs are documented in [`docs/prompts/`](docs/prompts/).
+Open the app — 20 pre-classified emails load automatically within seconds.  
+Look for the **RED scam cards at the top** — these are Gemini's flagged scam emails.  
+Click any red card to see exactly why Gemini flagged it.
 
-### 1. AI Teammate Matchmaker (Participant Dashboard)
-Evaluates a solo participant's skills against a live pool to suggest balanced teams with a one-line fit rationale.
-```javascript
-const prompt = `You are a hackathon teammate matchmaker.
+**Demo credentials:**
+- Email: `demo@promptwars.com`
+- Password: `Demo1234!`
 
-Seeker profile:
-- Skills: ${skills}
-- Role: ${role}  
-- Interests: ${interests}
-
-Candidate pool:
-${CANDIDATE_POOL.map((c, i) => `${i + 1}. ${c.name} — Skills: ${c.skills.join(', ')}`).join('\n')}
-
-Rank all 3 candidates for compatibility with the seeker. For each, write a single-line match reason (max 15 words) explaining the fit. Estimate fit percentage.
-
-Respond ONLY with valid JSON...`;
-```
-
-### 2. Live Broadcast TL;DR Generator (Organizer Dashboard)
-Condenses long organizer announcements into punchy, actionable push notifications for participants.
-```javascript
-const prompt = `Summarize this event announcement in exactly ONE concise sentence (max 15 words). Be specific and actionable. Return ONLY the summary sentence, nothing else.
-
-Title: ${title}
-Body: ${body}`;
-```
-
-### 3. Judge Consensus Engine (Judge Queue)
-Generates an immediate, synthesized 2-sentence consensus from raw judge feedback to populate the organizer's review panel.
-```javascript
-const prompt = `Summarize this judge's feedback in exactly 2 sentences for organizer review:
-${feedback}
-
-Respond ONLY with the summary.`;
-```
-
-**Real Before/After Example:**
-- **Raw Judge Feedback Input:** *"The technical stack was robust, utilizing React and Firebase effectively. However, the user flow for the checkout process felt a bit clunky and took too many clicks. They also didn't clearly explain their monetization strategy during the Q&A, which is a major red flag for viability."*
-- **Gemini Consensus Output:** *"The team demonstrated strong technical execution with React and Firebase, but struggled with a clunky checkout flow. To improve, they must streamline the user experience and clearly define their monetization strategy."*
-
-## DEMO FLOW
-| Role | Action | Expected Real-Time Result |
-|---|---|---|
-| **Organizer** | View Live Ops Dashboard | Real-time counters wait for incoming data. |
-| **Participant** | Scan QR Code | Check-in counter on Live Ops immediately ticks up. |
-| **Participant** | Find My Team | Gemini analyzes skills and returns 3 AI-matched candidates. |
-| **Organizer** | Send Broadcast | Gemini generates a 15-word TL;DR; notification appears on all clients. |
-| **Judge** | Submit Score | Gemini synthesizes feedback into a 2-sentence consensus; Live Ops scoring counter ticks up; Leaderboard re-ranks instantly. |
+**To test upload:** Download [public/sample-inbox.json](public/sample-inbox.json) and drag it into the upload zone on the landing page.
