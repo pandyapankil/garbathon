@@ -16,23 +16,24 @@ Built using Google Antigravity with Claude Sonnet 4.6 Thinking → Gemini Flash.
 
 **Strategy:**
 - **Actor-first scaffolding** — all prompts written from Riya's perspective (post-layoff chaos), not as a generic email tool
-- **Domain-saturated Gemini system prompt** — scam signals specific to India: training fees, free-email domain impersonation, Aadhaar/PAN requests, PM Yojana fraud patterns
+- **Domain-saturated Gemini system prompt** — grounded in real-world fraud patterns from [Kaggle Real/Fake Job Postings](https://www.kaggle.com/datasets/shivamb/real-or-fake-fake-jobposting-prediction) and [HuggingFace Hinglish Scam Text](https://huggingface.co/datasets/bolewara/hinglish-scam-text-dataset): fake free email domains, training fees, Aadhaar/PAN phishing, PM Rozgar Yojana scams, urgency traps
 - **Seed-first demo** — 20 pre-classified emails load automatically on first visit; no judge action needed to see the wow moment
 - **Structured output** — Gemini returns typed JSON (status, scamReasons[], scamConfidence 0-1, company, role) — no regex parsing, no hallucination slippage
 
-See [docs/prompts/](docs/prompts/) for all AntiGravity prompts used.
+See [docs/prompts/](docs/prompts/) for all AntiGravity prompts used.  
 See [GOOGLE_SERVICES.md](GOOGLE_SERVICES.md) for exact file paths and API call locations.
 
-## HOW TO ACCESS
+## HOW TO ACCESS & DEMO
 
-**Live URL:** https://promptwars-aug29-yujtd6zcea-el.a.run.app
+- **Local Server:** `http://localhost:3000` (or run `npm start`)
+- **Run Tests:** `npm test` (8 unit & integration tests passing)
+- **Verify Build:** `npm run verify`
 
-Open the app — 20 pre-classified emails load automatically within seconds.  
-Look for the **RED scam cards at the top** — these are Gemini's flagged scam emails.  
-Click any red card to see exactly why Gemini flagged it.
-
-**Demo credentials:**
-- Email: `demo@promptwars.com`
-- Password: `Demo1234!`
-
-**To test upload:** Download [public/sample-inbox.json](public/sample-inbox.json) and drag it into the upload zone on the landing page.
+### Demo Walkthrough (60 Seconds)
+1. **Landing Page (`/`)**: Note the live stat counters, demo credentials (`demo@promptwars.com` / `Demo1234!`), and Riya's story hook.
+2. **Instant Demo**: Click **`⚡ Load 20 Sample Emails`** (or drag & drop `public/sample-inbox.json`).
+3. **Dashboard (`/dashboard`)**:
+   - **🚨 Red Scam Alert Zone**: Top section catches 5 fake offers (Deloitte ₹2,500 training fee, IBM Aadhaar scam, Amazon reviewer fraud, PM Rozgar Yojana, Tata Group data entry).
+   - **Scam Details Modal**: Click any red card to see full confidence score and specific fraud flags.
+   - **4-Column Kanban**: Applied (6), Interview (5), Rejected (3), Offer (1).
+   - **Follow-up Reminders**: Overdue yellow banners on applications silent for >7 days; click **`Mark done`** to resolve.
