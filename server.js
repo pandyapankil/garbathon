@@ -508,6 +508,20 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Job Hunt Autopilot server listening on port ${PORT}`);
-});
+function startServer(port) {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`Job Hunt Autopilot server listening on http://localhost:${port}`);
+  });
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && port !== 3000) {
+      console.warn(`⚠️ Port ${port} is in use, automatically retrying on port 3000...`);
+      startServer(3000);
+    } else {
+      console.error('Server listen error:', err);
+      process.exit(1);
+    }
+  });
+}
+
+const initialPort = parseInt(process.env.PORT, 10) || 3000;
+startServer(initialPort);
