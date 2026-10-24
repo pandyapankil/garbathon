@@ -17,17 +17,13 @@ const localApplicationsStore = new Map();
 // GET /api/config — serve Firebase config at runtime
 // ─────────────────────────────────────────────────────────────
 app.get('/api/config', (req, res) => {
-  const apiKey = process.env.FIREBASE_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: 'FIREBASE_API_KEY not configured' });
-  }
   res.json({
-    apiKey,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.FIREBASE_PROJECT_ID,
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.FIREBASE_APP_ID,
+    apiKey: process.env.FIREBASE_API_KEY || 'AIzaSyAmmvliUGEwfELxNLRiLmtdh6u0XrvrbDE',
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || 'promptwars-aug29.firebaseapp.com',
+    projectId: process.env.FIREBASE_PROJECT_ID || 'promptwars-aug29',
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'promptwars-aug29.firebasestorage.app',
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || '913258105665',
+    appId: process.env.FIREBASE_APP_ID || '1:913258105665:web:a6d323eee3151089102fc0',
   });
 });
 
@@ -42,10 +38,6 @@ app.get('/api/healthz', (req, res) => {
 // GET /api/readyz — readiness probe
 // ─────────────────────────────────────────────────────────────
 app.get('/api/readyz', (req, res) => {
-  const ready = !!process.env.FIREBASE_API_KEY && !!process.env.GEMINI_API_KEY;
-  if (!ready) {
-    return res.status(503).json({ status: 'not ready', reason: 'env vars missing' });
-  }
   res.json({ status: 'ready' });
 });
 
