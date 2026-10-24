@@ -25,6 +25,7 @@ See [GOOGLE_SERVICES.md](GOOGLE_SERVICES.md) for exact file paths and API call l
 
 ## HOW TO ACCESS & DEMO
 
+- **Live Cloud Run URL:** https://promptwars-aug29-ucmrnctwfq-el.a.run.app
 - **Local Server:** `http://localhost:3000` (or run `npm start`)
 - **Run Tests:** `npm test` (8 unit & integration tests passing)
 - **Verify Build:** `npm run verify`
